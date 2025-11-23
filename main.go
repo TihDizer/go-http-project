@@ -64,19 +64,19 @@ func main() {
 		}
 
 		// Проверка Load Average
-		if bodyFloats[0] > 30 {
+		if bodyFloats[0] >= 30 {
 			fmt.Printf("Load Average is too high: %d\n", int(bodyFloats[0]))
 		}
 
 		// Проверка памяти
 		memUsage := bodyFloats[2] / bodyFloats[1] * 100
-		if memUsage > 80 {
+		if memUsage >= 80 {
 			fmt.Printf("Memory usage too high: %d%%\n", int(memUsage))
 		}
 
 		// Проверка диска
 		diskUsage := bodyFloats[4] / bodyFloats[3] * 100
-		if diskUsage > 90 {
+		if diskUsage >= 90 {
 			freeMb := int((bodyFloats[3] - bodyFloats[4]) / (1024 * 1024))
 			fmt.Printf("Free disk space is too low: %d Mb left\n", freeMb)
 		}
