@@ -1,62 +1,93 @@
 package main
 
 import (
-	"fmt"
-	"io"
-	"net/http"
-	"strconv"
-	"strings"
-	"time"
+    "fmt"
+    "io"
+    "net/http"
+    "strconv"
+    "strings"
+    "time"
 )
 
 func main() {
-	var errorsCount uint8
-	client := &http.Client{}
+    var errorsCount uint8
+    client := &http.Client{}
 
-	for {
-		resp, err := client.Get("http://srv.msk01.gigacorp.local/_stats")
-		if err != nil {
-			panic(err)
-		}
+    for {
+        resp, err := client.Get("http://srv.msk01.gigacorp.local/_stats")
+        if err != nil || resp.StatusCode != http.StatusOK {
+            errorsCount++
+            if errorsCount >= 3 {
+                fmt.Println("Unable to fetch server statistic.")
+                break
+            }
+            time.Sleep(1 * time.Second)
+            continue
+        }
 
-		body, err := io.ReadAll(resp.Body)
+        body, err := io.ReadAll(resp.Body)
+        _ = resp.Body.Close()
+        if err != nil {
+            errorsCount++
+            if errorsCount >= 3 {
+                fmt.Println("Unable to fetch server statistic.")
+                break
+            }
+            time.Sleep(1 * time.Second)
+            continue
+        }
 
-		defer resp.Body.Close()
+        bodyString := strings.TrimSpace(string(body))
+        bodyParts := strings.Split(bodyString, ",")
+        if len(bodyParts) != 7 {
+            errorsCount++
+            if errorsCount >= 3 {
+                fmt.Println("Unable to fetch server statistic.")
+                break
+            }
+            time.Sleep(1 * time.Second)
+            continue
+        }
 
-		bodyString := string(body)
-		bodyParts := strings.Split(bodyString, ",")
-		bodyFloats := make([]float64, len(bodyParts))
-		for i, part := range bodyParts {
-			bodyFloats[i], _ = strconv.ParseFloat(part, 64)
-		}
+        bodyFloats := make([]float64, len(bodyParts))
+        for i, part := range bodyParts {
+            f, err := strconv.ParseFloat(part, 64)
+            if err != nil {
+                errorsCount++
+                if errorsCount >= 3 {
+                    fmt.Println("Unable to fetch server statistic.")
+                    break
+                }
+                continue
+            }
+            bodyFloats[i] = f
+        }
 
-		if resp.StatusCode != http.StatusOK || len(bodyParts) < 6 {
-			errorsCount++
-			continue
-		}
+        // Проверка Load Average
+        if bodyFloats[0] > 30 {
+            fmt.Printf("Load Average is too high: %.2f\n", bodyFloats[0])
+        }
 
-		if bodyFloats[0] > 30 {
-			fmt.Printf("Load Average is too high: %d\n", int(bodyFloats[0]))
-		}
+        // Проверка памяти
+        memUsage := bodyFloats[2] / bodyFloats[1] * 100
+        if memUsage > 80 {
+            fmt.Printf("Memory usage too high: %d%%\n", int(memUsage))
+        }
 
-		if bodyFloats[2] > 0.8*bodyFloats[1] {
-			fmt.Printf("Memory usage too high: %d\n", int(bodyFloats[2]))
-		}
+        // Проверка диска
+        diskUsage := bodyFloats[4] / bodyFloats[3] * 100
+        if diskUsage > 90 {
+            freeMb := int((bodyFloats[3] - bodyFloats[4]) / (1024 * 1024))
+            fmt.Printf("Free disk space is too low: %d Mb left\n", freeMb)
+        }
 
-		if bodyFloats[4] > 0.9*bodyFloats[3] {
-			fmt.Printf("Free disk space is too low: %d Mb left\n", int(bodyFloats[4]))
-		}
+        // Проверка сети
+        netUsage := bodyFloats[6] / bodyFloats[5] * 100
+        if netUsage > 90 {
+            freeMbit := int(((bodyFloats[5] - bodyFloats[6]) * 8) / (1024 * 1024))
+            fmt.Printf("Network bandwidth usage high: %d Mbit/s available\n", freeMbit)
+        }
 
-		if bodyFloats[6] > 0.9*bodyFloats[5] {
-			fmt.Printf("Network bandwidth usage high: %d Mbit/s available\n", int(bodyFloats[6]))
-		}
-
-		if errorsCount > 2 {
-			fmt.Println("Unable to fetch server statistic")
-			break
-		}
-
-		fmt.Println(resp)
-		time.Sleep(1 * time.Second)
-	}
+        time.Sleep(1 * time.Second)
+    }
 }
