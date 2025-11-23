@@ -84,7 +84,7 @@ func main() {
 		// Проверка сети
 		netUsage := bodyFloats[6] / bodyFloats[5] * 100
 		if netUsage > 90 {
-			freeMbit := (int(bodyFloats[5]) - int(bodyFloats[6])/(1024*1024))
+			freeMbit := int(bodyFloats[5]-bodyFloats[6]) / (1000 * 1000)
 			fmt.Printf("Network bandwidth usage high: %d Mbit/s available\n", freeMbit)
 		}
 
